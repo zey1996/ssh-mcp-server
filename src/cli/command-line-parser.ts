@@ -1,5 +1,9 @@
 import { parseArgs } from "node:util";
-import { SSHConfig, SshConnectionConfigMap, ParsedArgs } from "../models/types.js";
+import type {
+  SSHConfig,
+  SshConnectionConfigMap,
+  ParsedArgs,
+} from "../models/types.js";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -9,7 +13,8 @@ import { lookupSshConfig } from "../utils/ssh-config-parser.js";
  * Command line argument parser class
  */
 export class CommandLineParser {
-  private static readonly DEFAULT_TRANSPORT_MODE: SSHConfig["transportMode"] = "exec";
+  private static readonly DEFAULT_TRANSPORT_MODE: SSHConfig["transportMode"] =
+    "exec";
   private static readonly DEFAULT_SHELL_READY_TIMEOUT_MS = 10000;
 
   private static parseBoolean(value: unknown): boolean | undefined {
@@ -38,12 +43,12 @@ export class CommandLineParser {
       return undefined;
     }
 
-    if (value === "exec" || value === "shell") {
+    if (value === "exec" || value === "shell" || value === "terminal") {
       return value;
     }
 
     throw new Error(
-      `transportMode must be either 'exec' or 'shell', got: ${String(value)}`,
+      `transportMode must be one of 'exec', 'shell', or 'terminal', got: ${String(value)}`,
     );
   }
 
@@ -59,7 +64,9 @@ export class CommandLineParser {
       typeof value === "number" ? value : parseInt(String(value), 10);
 
     if (!Number.isFinite(parsed) || parsed <= 0) {
-      throw new Error(`${fieldName} must be a positive number, got: ${String(value)}`);
+      throw new Error(
+        `${fieldName} must be a positive number, got: ${String(value)}`,
+      );
     }
 
     return parsed;
@@ -90,10 +97,13 @@ export class CommandLineParser {
         "allowed-remote-paths": { type: "string" },
         "transport-mode": { type: "string" },
         "shell-ready-timeout": { type: "string" },
+        "terminal-cols": { type: "string" },
+        "terminal-rows": { type: "string" },
         "command-template": { type: "string" },
         pty: { type: "boolean" },
         "try-keyboard": { type: "boolean" },
         "pre-connect": { type: "boolean" },
+        "audit-log": { type: "string" },
       },
       allowPositionals: true,
     });
@@ -109,29 +119,42 @@ export class CommandLineParser {
       try {
         const configContent = fs.readFileSync(configFilePath, "utf-8");
         const fileConfig = JSON.parse(configContent);
-        
+
         // Support both array format and object format
         if (Array.isArray(fileConfig)) {
           // Array format: [{name: "dev", host: "...", ...}, ...]
           for (const config of fileConfig) {
-            if (!config.name || !config.host || !config.port || !config.username) {
-              throw new Error("Each config in array must include name, host, port, username");
+            if (
+              !config.name ||
+              !config.host ||
+              !config.port ||
+              !config.username
+            ) {
+              throw new Error(
+                "Each config in array must include name, host, port, username",
+              );
             }
-            configMap[config.name] = this.normalizeConfig(config);
+            configMap[config.name] = CommandLineParser.normalizeConfig(config);
           }
         } else if (typeof fileConfig === "object" && fileConfig !== null) {
           // Object format: {"dev": {host: "...", ...}, "prod": {...}}
           for (const [name, config] of Object.entries(fileConfig)) {
-            const normalizedConfig = this.normalizeConfig(config as any);
+            const normalizedConfig = CommandLineParser.normalizeConfig(
+              config as any,
+            );
             normalizedConfig.name = name;
             configMap[name] = normalizedConfig;
           }
         } else {
-          throw new Error("Config file must contain an array or object of SSH configurations");
+          throw new Error(
+            "Config file must contain an array or object of SSH configurations",
+          );
         }
       } catch (err) {
         if (err instanceof SyntaxError) {
-          throw new Error(`Invalid JSON in config file: ${(err as Error).message}`);
+          throw new Error(
+            `Invalid JSON in config file: ${(err as Error).message}`,
+          );
         }
         throw err;
       }
@@ -142,28 +165,30 @@ export class CommandLineParser {
       const sshParams: string[] = Array.isArray(values.ssh)
         ? values.ssh
         : values.ssh
-        ? [values.ssh]
-        : [];
+          ? [values.ssh]
+          : [];
 
       for (const sshStr of sshParams) {
         let conf: SSHConfig;
-        
+
         // Try to parse as JSON first
         if (sshStr.trim().startsWith("{")) {
           try {
             const jsonConfig = JSON.parse(sshStr);
-            conf = this.normalizeConfig(jsonConfig);
+            conf = CommandLineParser.normalizeConfig(jsonConfig);
             if (!conf.name) {
               throw new Error("JSON config must include 'name' field");
             }
           } catch (err) {
-            throw new Error(`Invalid JSON format in --ssh parameter: ${(err as Error).message}`);
+            throw new Error(
+              `Invalid JSON format in --ssh parameter: ${(err as Error).message}`,
+            );
           }
         } else {
           // Fallback to legacy comma-separated format for backward compatibility
-          conf = this.parseLegacySshFormat(sshStr);
+          conf = CommandLineParser.parseLegacySshFormat(sshStr);
         }
-        
+
         if (!conf.name || !conf.host || !conf.port || !conf.username) {
           throw new Error("Each --ssh must include name, host, port, username");
         }
@@ -186,16 +211,22 @@ export class CommandLineParser {
         }
       }
 
-      const portStr = values.port || positionals[1] || sshConfigEntry?.port?.toString() || "22";
-      const username = values.username || positionals[2] || sshConfigEntry?.user;
+      const portStr =
+        values.port ||
+        positionals[1] ||
+        sshConfigEntry?.port?.toString() ||
+        "22";
+      const username =
+        values.username || positionals[2] || sshConfigEntry?.user;
       const password = values.password || positionals[3];
       const privateKey = values.privateKey || sshConfigEntry?.identityFile;
       const passphrase = values.passphrase || process.env.SSH_MCP_PASSPHRASE;
-      const resolvedAgent = values.agent !== undefined
-        ? values.agent
-        : !password && !privateKey
-        ? process.env.SSH_AUTH_SOCK
-        : undefined;
+      const resolvedAgent =
+        values.agent !== undefined
+          ? values.agent
+          : !password && !privateKey
+            ? process.env.SSH_AUTH_SOCK
+            : undefined;
       const whitelist = values.whitelist;
       const blacklist = values.blacklist;
       const allowedLocalPaths = values["allowed-local-paths"];
@@ -207,9 +238,14 @@ export class CommandLineParser {
       // 实际连接地址：优先使用 SSH config 的 HostName
       const actualHost = sshConfigEntry?.hostName || host;
 
-      if (!actualHost || !portStr || !username || (!password && !privateKey && !resolvedAgent)) {
+      if (
+        !actualHost ||
+        !portStr ||
+        !username ||
+        (!password && !privateKey && !resolvedAgent)
+      ) {
         throw new Error(
-          "Missing required parameters, need to provide host, port, username and password, private key or agent"
+          "Missing required parameters, need to provide host, port, username and password, private key or agent",
         );
       }
 
@@ -218,7 +254,7 @@ export class CommandLineParser {
         throw new Error("Port must be a valid number");
       }
 
-      configMap["default"] = this.normalizeConfig({
+      configMap["default"] = CommandLineParser.normalizeConfig({
         name: "default",
         host: actualHost,
         port,
@@ -232,6 +268,8 @@ export class CommandLineParser {
         tryKeyboard: tryKeyboard !== undefined ? tryKeyboard : undefined,
         transportMode: values["transport-mode"],
         shellReadyTimeoutMs: values["shell-ready-timeout"],
+        terminalCols: values["terminal-cols"],
+        terminalRows: values["terminal-rows"],
         commandTemplate,
         commandWhitelist: whitelist
           ? whitelist
@@ -263,6 +301,7 @@ export class CommandLineParser {
     return {
       configs: configMap,
       preConnect: values["pre-connect"] === true,
+      auditLog: values["audit-log"],
     };
   }
 
@@ -273,7 +312,7 @@ export class CommandLineParser {
   private static parseLegacySshFormat(sshStr: string): SSHConfig {
     const conf: any = {};
     const parts = sshStr.split(",");
-    
+
     for (const part of parts) {
       // Only split on the first '=' to handle values containing '='
       const equalIndex = part.indexOf("=");
@@ -285,15 +324,15 @@ export class CommandLineParser {
         }
       }
     }
-    
+
     const port = parseInt(conf.port, 10);
     if (isNaN(port)) {
       throw new Error(
-        `Port for connection ${conf.name || "unknown"} must be a valid number`
+        `Port for connection ${conf.name || "unknown"} must be a valid number`,
       );
     }
-    
-    return this.normalizeConfig(conf);
+
+    return CommandLineParser.normalizeConfig(conf);
   }
 
   /**
@@ -301,9 +340,8 @@ export class CommandLineParser {
    * @private
    */
   private static normalizeConfig(config: any): SSHConfig {
-    const port = typeof config.port === "number"
-      ? config.port
-      : parseInt(config.port, 10);
+    const port =
+      typeof config.port === "number" ? config.port : parseInt(config.port, 10);
 
     if (isNaN(port)) {
       throw new Error(`Port must be a valid number, got: ${config.port}`);
@@ -316,92 +354,111 @@ export class CommandLineParser {
       username: config.username || config.user,
       password: config.password,
       privateKey: config.privateKey
-        ? this.normalizeLocalPath(String(config.privateKey))
+        ? CommandLineParser.normalizeLocalPath(String(config.privateKey))
         : undefined,
       passphrase: config.passphrase || process.env.SSH_MCP_PASSPHRASE,
       agent: config.agent,
       socksProxy: config.socksProxy,
-      pty: this.parseBoolean(config.pty),
-      tryKeyboard: this.parseBoolean(config.tryKeyboard),
+      pty: CommandLineParser.parseBoolean(config.pty),
+      tryKeyboard: CommandLineParser.parseBoolean(config.tryKeyboard),
       transportMode:
-        this.parseTransportMode(config.transportMode) ||
-        this.DEFAULT_TRANSPORT_MODE,
+        CommandLineParser.parseTransportMode(config.transportMode) ||
+        CommandLineParser.DEFAULT_TRANSPORT_MODE,
       shellReadyTimeoutMs:
-        this.parseTimeout(
+        CommandLineParser.parseTimeout(
           config.shellReadyTimeoutMs,
           "shellReadyTimeoutMs",
-        ) || this.DEFAULT_SHELL_READY_TIMEOUT_MS,
-      shellCommandTimeoutMs: this.parseTimeout(
+        ) || CommandLineParser.DEFAULT_SHELL_READY_TIMEOUT_MS,
+      shellCommandTimeoutMs: CommandLineParser.parseTimeout(
         config.shellCommandTimeoutMs,
         "shellCommandTimeoutMs",
       ),
-      connectionTimeoutMs: this.parseTimeout(
+      terminalCols: CommandLineParser.parseTimeout(
+        config.terminalCols,
+        "terminalCols",
+      ),
+      terminalRows: CommandLineParser.parseTimeout(
+        config.terminalRows,
+        "terminalRows",
+      ),
+      connectionTimeoutMs: CommandLineParser.parseTimeout(
         config.connectionTimeoutMs,
         "connectionTimeoutMs",
       ),
-      sftpTimeoutMs: this.parseTimeout(config.sftpTimeoutMs, "sftpTimeoutMs"),
-      keepaliveIntervalMs: this.parseTimeout(
+      sftpTimeoutMs: CommandLineParser.parseTimeout(
+        config.sftpTimeoutMs,
+        "sftpTimeoutMs",
+      ),
+      keepaliveIntervalMs: CommandLineParser.parseTimeout(
         config.keepaliveIntervalMs,
         "keepaliveIntervalMs",
       ),
-      keepaliveCountMax: this.parseTimeout(
+      keepaliveCountMax: CommandLineParser.parseTimeout(
         config.keepaliveCountMax,
         "keepaliveCountMax",
       ),
       commandWhitelist: Array.isArray(config.commandWhitelist)
         ? config.commandWhitelist
         : config.whitelist
-        ? typeof config.whitelist === "string"
-          ? config.whitelist.split("|").map((s: string) => s.trim()).filter(Boolean)
-          : config.whitelist
-        : undefined,
+          ? typeof config.whitelist === "string"
+            ? config.whitelist
+                .split("|")
+                .map((s: string) => s.trim())
+                .filter(Boolean)
+            : config.whitelist
+          : undefined,
       commandBlacklist: Array.isArray(config.commandBlacklist)
         ? config.commandBlacklist
         : config.blacklist
-        ? typeof config.blacklist === "string"
-          ? config.blacklist.split("|").map((s: string) => s.trim()).filter(Boolean)
-          : config.blacklist
-        : undefined,
+          ? typeof config.blacklist === "string"
+            ? config.blacklist
+                .split("|")
+                .map((s: string) => s.trim())
+                .filter(Boolean)
+            : config.blacklist
+          : undefined,
       allowedLocalPaths: Array.isArray(config.allowedLocalPaths)
         ? config.allowedLocalPaths
             .map((allowedPath: unknown) =>
-              this.normalizeLocalPath(String(allowedPath)),
+              CommandLineParser.normalizeLocalPath(String(allowedPath)),
             )
             .filter(Boolean)
         : typeof config.allowedLocalPaths === "string"
           ? config.allowedLocalPaths
               .split("|")
               .map((allowedPath: string) =>
-                this.normalizeLocalPath(allowedPath.trim()),
+                CommandLineParser.normalizeLocalPath(allowedPath.trim()),
               )
               .filter(Boolean)
           : undefined,
       allowedRemotePaths: Array.isArray(config.allowedRemotePaths)
-        ? config.allowedRemotePaths
-            .map((allowedPath: unknown) =>
-              this.normalizeRemotePath(String(allowedPath)),
-            )
+        ? config.allowedRemotePaths.map((allowedPath: unknown) =>
+            CommandLineParser.normalizeRemotePath(String(allowedPath)),
+          )
         : typeof config.allowedRemotePaths === "string"
           ? config.allowedRemotePaths
               .split("|")
               .map((allowedPath: string) =>
-                this.normalizeRemotePath(allowedPath.trim()),
+                CommandLineParser.normalizeRemotePath(allowedPath.trim()),
               )
               .filter(Boolean)
           : undefined,
-      commandTemplate: this.parseCommandTemplate(config.commandTemplate),
+      commandTemplate: CommandLineParser.parseCommandTemplate(
+        config.commandTemplate,
+      ),
     };
   }
 
-  private static parseCommandTemplate(
-    value: unknown,
-  ): string | undefined {
+  private static parseCommandTemplate(value: unknown): string | undefined {
     if (value === undefined || value === null || value === "") {
       return undefined;
     }
 
     const template = String(value);
-    if (!template.includes("<command>") && !template.includes("<quotedCommand>")) {
+    if (
+      !template.includes("<command>") &&
+      !template.includes("<quotedCommand>")
+    ) {
       throw new Error(
         `commandTemplate must contain '<command>' or '<quotedCommand>' placeholder, got: ${template}`,
       );
@@ -411,7 +468,7 @@ export class CommandLineParser {
   }
 
   private static normalizeLocalPath(localPath: string): string {
-    return path.resolve(this.expandHomePath(localPath));
+    return path.resolve(CommandLineParser.expandHomePath(localPath));
   }
 
   private static expandHomePath(localPath: string): string {

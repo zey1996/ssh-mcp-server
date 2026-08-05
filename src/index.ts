@@ -22,8 +22,11 @@ Options:
   -s, --socksProxy <url>           SOCKS proxy URL
   --allowed-local-paths <paths>    Extra allowed local paths, comma-separated
   --allowed-remote-paths <paths>   Allowed remote POSIX absolute paths, comma-separated
-  --transport-mode <mode>          SSH transport mode: exec or shell (default: exec)
+  --transport-mode <mode>          SSH transport mode: exec, shell, or terminal (default: exec)
   --shell-ready-timeout <ms>       Shell readiness probe timeout (default: 10000)
+  --terminal-cols <cols>           Terminal PTY width in columns for 'terminal' mode (default: 200)
+  --terminal-rows <rows>           Terminal PTY height in rows for 'terminal' mode (default: 50)
+  --audit-log <path>               Audit log file path; records every tool operation as JSONL. Also set via SSH_MCP_AUDIT_LOG env var. Disabled by default.
   --command-template <template>    Wrap commands with <command> or <quotedCommand>
   --pty                           Allocate pseudo-tty for exec mode commands (default: true)
   --try-keyboard                  Enable keyboard-interactive authentication
@@ -32,25 +35,27 @@ Options:
   --help                          Print this help message`;
 
 function hasArg(...names: string[]): boolean {
-  return process.argv.slice(2).some((arg) => names.includes(arg));
+	return process.argv.slice(2).some((arg) => names.includes(arg));
 }
 
 /**
  * Main program entry
  */
 async function main(): Promise<void> {
-  if (hasArg("--help")) {
-    console.log(HELP_TEXT);
-    return;
-  }
+	if (hasArg("--help")) {
+		console.log(HELP_TEXT);
+		return;
+	}
 
-  if (hasArg("--version", "-v")) {
-    console.log(SERVER_CONFIG.version);
-    return;
-  }
+	if (hasArg("--version", "-v")) {
+		console.log(SERVER_CONFIG.version);
+		return;
+	}
 
-  const sshMcpServer = new SshMcpServer();
-  await sshMcpServer.run();
+	const sshMcpServer = new SshMcpServer();
+	await sshMcpServer.run();
 }
 
-main().catch((error) => Logger.handleError(error, "【SSH MCP Server Error】", true));
+main().catch((error) =>
+	Logger.handleError(error, "【SSH MCP Server Error】", true),
+);

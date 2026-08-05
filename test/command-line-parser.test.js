@@ -1,15 +1,15 @@
-import { describe, it, before, after } from 'node:test';
-import assert from 'node:assert';
-import { CommandLineParser } from '../build/cli/command-line-parser.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import { fileURLToPath } from 'url';
+import { describe, it, before, after } from "node:test";
+import assert from "node:assert";
+import { CommandLineParser } from "../build/cli/command-line-parser.js";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
+import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-describe('Command Line Parser', () => {
+describe("Command Line Parser", () => {
   let originalArgv;
   let testConfigPath;
   let testSshConfigPath;
@@ -18,38 +18,44 @@ describe('Command Line Parser', () => {
     originalArgv = process.argv;
 
     // 创建测试配置文件
-    const fixturesDir = path.join(__dirname, 'fixtures');
+    const fixturesDir = path.join(__dirname, "fixtures");
     if (!fs.existsSync(fixturesDir)) {
       fs.mkdirSync(fixturesDir, { recursive: true });
     }
 
-    testConfigPath = path.join(fixturesDir, 'test-config.json');
-    testSshConfigPath = path.join(fixturesDir, 'test-ssh-config');
+    testConfigPath = path.join(fixturesDir, "test-config.json");
+    testSshConfigPath = path.join(fixturesDir, "test-ssh-config");
 
     // 创建 JSON 配置文件
-    fs.writeFileSync(testConfigPath, JSON.stringify({
-      dev: {
-        host: '192.168.1.100',
-        port: 22,
-        username: 'devuser',
-        password: 'devpass'
-      },
-      prod: {
-        host: '10.0.0.50',
-        port: 22,
-        username: 'produser',
-        privateKey: '~/.ssh/prod_key'
-      }
-    }));
+    fs.writeFileSync(
+      testConfigPath,
+      JSON.stringify({
+        dev: {
+          host: "192.168.1.100",
+          port: 22,
+          username: "devuser",
+          password: "devpass",
+        },
+        prod: {
+          host: "10.0.0.50",
+          port: 22,
+          username: "produser",
+          privateKey: "~/.ssh/prod_key",
+        },
+      }),
+    );
 
     // 创建 SSH 配置文件
-    fs.writeFileSync(testSshConfigPath, `
+    fs.writeFileSync(
+      testSshConfigPath,
+      `
 Host testhost
     HostName 172.16.0.1
     Port 2222
     User testuser
     IdentityFile ~/.ssh/test_key
-`);
+`,
+    );
   });
 
   after(() => {
@@ -59,140 +65,206 @@ Host testhost
     try {
       fs.unlinkSync(testConfigPath);
       fs.unlinkSync(testSshConfigPath);
-      fs.rmdirSync(path.join(__dirname, 'fixtures'));
+      fs.rmdirSync(path.join(__dirname, "fixtures"));
     } catch (err) {
       // 忽略清理错误
     }
   });
 
-  describe('配置文件解析', () => {
-    it('应该正确解析 JSON 配置文件（对象格式）', () => {
-      process.argv = ['node', 'test', '--config-file', testConfigPath];
+  describe("配置文件解析", () => {
+    it("应该正确解析 JSON 配置文件（对象格式）", () => {
+      process.argv = ["node", "test", "--config-file", testConfigPath];
       const result = CommandLineParser.parseArgs();
 
       assert.strictEqual(Object.keys(result.configs).length, 2);
-      assert.strictEqual(result.configs.dev.host, '192.168.1.100');
-      assert.strictEqual(result.configs.dev.username, 'devuser');
-      assert.strictEqual(result.configs.prod.privateKey, path.join(os.homedir(), '.ssh', 'prod_key'));
+      assert.strictEqual(result.configs.dev.host, "192.168.1.100");
+      assert.strictEqual(result.configs.dev.username, "devuser");
+      assert.strictEqual(
+        result.configs.prod.privateKey,
+        path.join(os.homedir(), ".ssh", "prod_key"),
+      );
     });
 
-    it('应该正确解析 JSON 配置文件（数组格式）', () => {
-      const arrayConfigPath = path.join(__dirname, 'fixtures', 'array-config.json');
-      fs.writeFileSync(arrayConfigPath, JSON.stringify([
-        {
-          name: 'server1',
-          host: '1.2.3.4',
-          port: 22,
-          username: 'user1',
-          password: 'pass1'
-        },
-        {
-          name: 'server2',
-          host: '5.6.7.8',
-          port: 2222,
-          username: 'user2',
-          privateKey: '~/.ssh/key2'
-        }
-      ]));
+    it("应该正确解析 JSON 配置文件（数组格式）", () => {
+      const arrayConfigPath = path.join(
+        __dirname,
+        "fixtures",
+        "array-config.json",
+      );
+      fs.writeFileSync(
+        arrayConfigPath,
+        JSON.stringify([
+          {
+            name: "server1",
+            host: "1.2.3.4",
+            port: 22,
+            username: "user1",
+            password: "pass1",
+          },
+          {
+            name: "server2",
+            host: "5.6.7.8",
+            port: 2222,
+            username: "user2",
+            privateKey: "~/.ssh/key2",
+          },
+        ]),
+      );
 
-      process.argv = ['node', 'test', '--config-file', arrayConfigPath];
+      process.argv = ["node", "test", "--config-file", arrayConfigPath];
       const result = CommandLineParser.parseArgs();
 
       assert.strictEqual(Object.keys(result.configs).length, 2);
-      assert.strictEqual(result.configs.server1.host, '1.2.3.4');
+      assert.strictEqual(result.configs.server1.host, "1.2.3.4");
       assert.strictEqual(result.configs.server2.port, 2222);
 
       fs.unlinkSync(arrayConfigPath);
     });
 
-    it('配置文件不存在时应抛出错误', () => {
-      process.argv = ['node', 'test', '--config-file', '/nonexistent/config.json'];
+    it("配置文件不存在时应抛出错误", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--config-file",
+        "/nonexistent/config.json",
+      ];
       assert.throws(() => {
         CommandLineParser.parseArgs();
       }, /not found/);
     });
   });
 
-  describe('--ssh 参数解析', () => {
-    it('应该正确解析 JSON 格式的 --ssh 参数', () => {
+  describe("--ssh 参数解析", () => {
+    it("应该正确解析 JSON 格式的 --ssh 参数", () => {
       const sshJson = JSON.stringify({
-        name: 'test',
-        host: '1.2.3.4',
+        name: "test",
+        host: "1.2.3.4",
         port: 22,
-        username: 'testuser',
-        password: 'testpass',
-        transportMode: 'shell',
-        shellReadyTimeoutMs: 15000
+        username: "testuser",
+        password: "testpass",
+        transportMode: "shell",
+        shellReadyTimeoutMs: 15000,
       });
 
-      process.argv = ['node', 'test', '--ssh', sshJson];
+      process.argv = ["node", "test", "--ssh", sshJson];
       const result = CommandLineParser.parseArgs();
 
-      assert.strictEqual(result.configs.test.host, '1.2.3.4');
-      assert.strictEqual(result.configs.test.username, 'testuser');
-      assert.strictEqual(result.configs.test.transportMode, 'shell');
+      assert.strictEqual(result.configs.test.host, "1.2.3.4");
+      assert.strictEqual(result.configs.test.username, "testuser");
+      assert.strictEqual(result.configs.test.transportMode, "shell");
       assert.strictEqual(result.configs.test.shellReadyTimeoutMs, 15000);
     });
 
-    it('应该正确解析旧格式的 --ssh 参数', () => {
-      process.argv = ['node', 'test', '--ssh', 'name=legacy,host=1.2.3.4,port=22,user=legacyuser,password=legacypass'];
+    it("应该正确解析旧格式的 --ssh 参数", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--ssh",
+        "name=legacy,host=1.2.3.4,port=22,user=legacyuser,password=legacypass",
+      ];
       const result = CommandLineParser.parseArgs();
 
-      assert.strictEqual(result.configs.legacy.host, '1.2.3.4');
-      assert.strictEqual(result.configs.legacy.username, 'legacyuser');
+      assert.strictEqual(result.configs.legacy.host, "1.2.3.4");
+      assert.strictEqual(result.configs.legacy.username, "legacyuser");
     });
 
-    it('应该支持多个 --ssh 参数', () => {
-      const ssh1 = JSON.stringify({ name: 'server1', host: '1.1.1.1', port: 22, username: 'user1', password: 'pass1' });
-      const ssh2 = JSON.stringify({ name: 'server2', host: '2.2.2.2', port: 22, username: 'user2', password: 'pass2' });
+    it("应该支持多个 --ssh 参数", () => {
+      const ssh1 = JSON.stringify({
+        name: "server1",
+        host: "1.1.1.1",
+        port: 22,
+        username: "user1",
+        password: "pass1",
+      });
+      const ssh2 = JSON.stringify({
+        name: "server2",
+        host: "2.2.2.2",
+        port: 22,
+        username: "user2",
+        password: "pass2",
+      });
 
-      process.argv = ['node', 'test', '--ssh', ssh1, '--ssh', ssh2];
+      process.argv = ["node", "test", "--ssh", ssh1, "--ssh", ssh2];
       const result = CommandLineParser.parseArgs();
 
       assert.strictEqual(Object.keys(result.configs).length, 2);
-      assert.strictEqual(result.configs.server1.host, '1.1.1.1');
-      assert.strictEqual(result.configs.server2.host, '2.2.2.2');
+      assert.strictEqual(result.configs.server1.host, "1.1.1.1");
+      assert.strictEqual(result.configs.server2.host, "2.2.2.2");
     });
   });
 
-  describe('单连接模式（旧格式）', () => {
-    it('应该正确解析命令行参数', () => {
-      process.argv = ['node', 'test', '--host', '1.2.3.4', '--port', '22', '--username', 'testuser', '--password', 'testpass'];
+  describe("单连接模式（旧格式）", () => {
+    it("应该正确解析命令行参数", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--port",
+        "22",
+        "--username",
+        "testuser",
+        "--password",
+        "testpass",
+      ];
       const result = CommandLineParser.parseArgs();
 
-      assert.strictEqual(result.configs.default.host, '1.2.3.4');
+      assert.strictEqual(result.configs.default.host, "1.2.3.4");
       assert.strictEqual(result.configs.default.port, 22);
-      assert.strictEqual(result.configs.default.username, 'testuser');
-      assert.strictEqual(result.configs.default.password, 'testpass');
+      assert.strictEqual(result.configs.default.username, "testuser");
+      assert.strictEqual(result.configs.default.password, "testpass");
     });
 
-    it('应该正确解析位置参数', () => {
-      process.argv = ['node', 'test', '1.2.3.4', '22', 'testuser', 'testpass'];
+    it("应该正确解析位置参数", () => {
+      process.argv = ["node", "test", "1.2.3.4", "22", "testuser", "testpass"];
       const result = CommandLineParser.parseArgs();
 
-      assert.strictEqual(result.configs.default.host, '1.2.3.4');
+      assert.strictEqual(result.configs.default.host, "1.2.3.4");
       assert.strictEqual(result.configs.default.port, 22);
-      assert.strictEqual(result.configs.default.username, 'testuser');
-      assert.strictEqual(result.configs.default.password, 'testpass');
+      assert.strictEqual(result.configs.default.username, "testuser");
+      assert.strictEqual(result.configs.default.password, "testpass");
     });
 
-    it('应该支持私钥认证', () => {
-      process.argv = ['node', 'test', '--host', '1.2.3.4', '--port', '22', '--username', 'testuser', '--privateKey', '~/.ssh/id_rsa'];
+    it("应该支持私钥认证", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--port",
+        "22",
+        "--username",
+        "testuser",
+        "--privateKey",
+        "~/.ssh/id_rsa",
+      ];
       const result = CommandLineParser.parseArgs();
 
-      assert.strictEqual(result.configs.default.privateKey, path.join(os.homedir(), '.ssh', 'id_rsa'));
+      assert.strictEqual(
+        result.configs.default.privateKey,
+        path.join(os.homedir(), ".ssh", "id_rsa"),
+      );
       assert.strictEqual(result.configs.default.password, undefined);
     });
 
-    it('显式 password 存在时不应注入环境 SSH agent', () => {
+    it("显式 password 存在时不应注入环境 SSH agent", () => {
       const originalSshAuthSock = process.env.SSH_AUTH_SOCK;
-      process.env.SSH_AUTH_SOCK = '/tmp/environment-agent.sock';
-      process.argv = ['node', 'test', '--host', '1.2.3.4', '--username', 'testuser', '--password', 'testpass'];
+      process.env.SSH_AUTH_SOCK = "/tmp/environment-agent.sock";
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--username",
+        "testuser",
+        "--password",
+        "testpass",
+      ];
 
       try {
         const result = CommandLineParser.parseArgs();
 
-        assert.strictEqual(result.configs.default.password, 'testpass');
+        assert.strictEqual(result.configs.default.password, "testpass");
         assert.strictEqual(result.configs.default.agent, undefined);
       } finally {
         if (originalSshAuthSock === undefined) {
@@ -203,15 +275,27 @@ Host testhost
       }
     });
 
-    it('显式 privateKey 存在时不应注入环境 SSH agent', () => {
+    it("显式 privateKey 存在时不应注入环境 SSH agent", () => {
       const originalSshAuthSock = process.env.SSH_AUTH_SOCK;
-      process.env.SSH_AUTH_SOCK = '/tmp/environment-agent.sock';
-      process.argv = ['node', 'test', '--host', '1.2.3.4', '--username', 'testuser', '--privateKey', '~/.ssh/id_rsa'];
+      process.env.SSH_AUTH_SOCK = "/tmp/environment-agent.sock";
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--username",
+        "testuser",
+        "--privateKey",
+        "~/.ssh/id_rsa",
+      ];
 
       try {
         const result = CommandLineParser.parseArgs();
 
-        assert.strictEqual(result.configs.default.privateKey, path.join(os.homedir(), '.ssh', 'id_rsa'));
+        assert.strictEqual(
+          result.configs.default.privateKey,
+          path.join(os.homedir(), ".ssh", "id_rsa"),
+        );
         assert.strictEqual(result.configs.default.agent, undefined);
       } finally {
         if (originalSshAuthSock === undefined) {
@@ -222,33 +306,50 @@ Host testhost
       }
     });
 
-    it('缺少必需参数时应抛出错误', () => {
-      process.argv = ['node', 'test', '--host', '1.2.3.4'];
+    it("缺少必需参数时应抛出错误", () => {
+      process.argv = ["node", "test", "--host", "1.2.3.4"];
       assert.throws(() => {
         CommandLineParser.parseArgs();
       }, /Missing required parameters/);
     });
   });
 
-  describe('SSH Config 集成', () => {
-    it('SSH config 缺少 Port 和 IdentityFile 时应使用默认端口和 SSH agent', () => {
-      const minimalSshConfigPath = path.join(__dirname, 'fixtures', 'minimal-ssh-config');
+  describe("SSH Config 集成", () => {
+    it("SSH config 缺少 Port 和 IdentityFile 时应使用默认端口和 SSH agent", () => {
+      const minimalSshConfigPath = path.join(
+        __dirname,
+        "fixtures",
+        "minimal-ssh-config",
+      );
       const originalSshAuthSock = process.env.SSH_AUTH_SOCK;
-      fs.writeFileSync(minimalSshConfigPath, `
+      fs.writeFileSync(
+        minimalSshConfigPath,
+        `
 Host minimalhost
     HostName 172.16.0.2
     User minimaluser
-`);
-      process.env.SSH_AUTH_SOCK = '/tmp/test-ssh-agent.sock';
-      process.argv = ['node', 'test', '--host', 'minimalhost', '--ssh-config-file', minimalSshConfigPath];
+`,
+      );
+      process.env.SSH_AUTH_SOCK = "/tmp/test-ssh-agent.sock";
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "minimalhost",
+        "--ssh-config-file",
+        minimalSshConfigPath,
+      ];
 
       try {
         const result = CommandLineParser.parseArgs();
 
-        assert.strictEqual(result.configs.default.host, '172.16.0.2');
+        assert.strictEqual(result.configs.default.host, "172.16.0.2");
         assert.strictEqual(result.configs.default.port, 22);
-        assert.strictEqual(result.configs.default.username, 'minimaluser');
-        assert.strictEqual(result.configs.default.agent, '/tmp/test-ssh-agent.sock');
+        assert.strictEqual(result.configs.default.username, "minimaluser");
+        assert.strictEqual(
+          result.configs.default.agent,
+          "/tmp/test-ssh-agent.sock",
+        );
       } finally {
         if (originalSshAuthSock === undefined) {
           delete process.env.SSH_AUTH_SOCK;
@@ -259,19 +360,30 @@ Host minimalhost
       }
     });
 
-    it('命令行 port 和 agent 应覆盖 SSH config 默认值', () => {
+    it("命令行 port 和 agent 应覆盖 SSH config 默认值", () => {
       const originalSshAuthSock = process.env.SSH_AUTH_SOCK;
-      process.env.SSH_AUTH_SOCK = '/tmp/environment-agent.sock';
+      process.env.SSH_AUTH_SOCK = "/tmp/environment-agent.sock";
 
       try {
         process.argv = [
-          'node', 'test', '--host', 'testhost', '--port', '3333', '--agent', '/tmp/explicit-agent.sock',
-          '--ssh-config-file', testSshConfigPath,
+          "node",
+          "test",
+          "--host",
+          "testhost",
+          "--port",
+          "3333",
+          "--agent",
+          "/tmp/explicit-agent.sock",
+          "--ssh-config-file",
+          testSshConfigPath,
         ];
         const result = CommandLineParser.parseArgs();
 
         assert.strictEqual(result.configs.default.port, 3333);
-        assert.strictEqual(result.configs.default.agent, '/tmp/explicit-agent.sock');
+        assert.strictEqual(
+          result.configs.default.agent,
+          "/tmp/explicit-agent.sock",
+        );
       } finally {
         if (originalSshAuthSock === undefined) {
           delete process.env.SSH_AUTH_SOCK;
@@ -281,96 +393,234 @@ Host minimalhost
       }
     });
 
-    it('应该从 SSH config 读取连接参数', () => {
-      process.argv = ['node', 'test', '--host', 'testhost', '--ssh-config-file', testSshConfigPath];
-      const result = CommandLineParser.parseArgs();
-
-      assert.strictEqual(result.configs.default.host, '172.16.0.1');
-      assert.strictEqual(result.configs.default.port, 2222);
-      assert.strictEqual(result.configs.default.username, 'testuser');
-      assert.ok(result.configs.default.privateKey.includes('.ssh/test_key'));
-    });
-
-    it('命令行参数应覆盖 SSH config 值', () => {
-      process.argv = ['node', 'test', '--host', 'testhost', '--port', '3333', '--ssh-config-file', testSshConfigPath];
-      const result = CommandLineParser.parseArgs();
-
-      assert.strictEqual(result.configs.default.port, 3333); // 覆盖
-      assert.strictEqual(result.configs.default.host, '172.16.0.1'); // 从 SSH config
-      assert.strictEqual(result.configs.default.username, 'testuser'); // 从 SSH config
-    });
-
-    it('应该支持 SSH config 别名 + 密码认证', () => {
-      process.argv = ['node', 'test', '--host', 'testhost', '--password', 'mypass', '--ssh-config-file', testSshConfigPath];
-      const result = CommandLineParser.parseArgs();
-
-      assert.strictEqual(result.configs.default.password, 'mypass');
-      assert.strictEqual(result.configs.default.host, '172.16.0.1');
-    });
-  });
-
-  describe('命令白名单和黑名单', () => {
-    it('应该正确解析命令白名单', () => {
-      process.argv = ['node', 'test', '--host', '1.2.3.4', '--port', '22', '--username', 'user', '--password', 'pass', '--whitelist', 'ls,cat,grep'];
-      const result = CommandLineParser.parseArgs();
-
-      assert.deepStrictEqual(result.configs.default.commandWhitelist, ['ls', 'cat', 'grep']);
-    });
-
-    it('应该正确解析命令黑名单', () => {
-      process.argv = ['node', 'test', '--host', '1.2.3.4', '--port', '22', '--username', 'user', '--password', 'pass', '--blacklist', 'rm,shutdown,reboot'];
-      const result = CommandLineParser.parseArgs();
-
-      assert.deepStrictEqual(result.configs.default.commandBlacklist, ['rm', 'shutdown', 'reboot']);
-    });
-  });
-
-  describe('其他选项', () => {
-    it('默认 transportMode 应为 exec', () => {
-      process.argv = ['node', 'test', '--host', '1.2.3.4', '--port', '22', '--username', 'user', '--password', 'pass'];
-      const result = CommandLineParser.parseArgs();
-
-      assert.strictEqual(result.configs.default.transportMode, 'exec');
-      assert.strictEqual(result.configs.default.shellReadyTimeoutMs, 10000);
-    });
-
-    it('应该正确解析 shell transport 相关选项', () => {
+    it("应该从 SSH config 读取连接参数", () => {
       process.argv = [
-        'node',
-        'test',
-        '--host', '1.2.3.4',
-        '--port', '22',
-        '--username', 'user',
-        '--password', 'pass',
-        '--transport-mode', 'shell',
-        '--shell-ready-timeout', '15000'
+        "node",
+        "test",
+        "--host",
+        "testhost",
+        "--ssh-config-file",
+        testSshConfigPath,
       ];
       const result = CommandLineParser.parseArgs();
 
-      assert.strictEqual(result.configs.default.transportMode, 'shell');
+      assert.strictEqual(result.configs.default.host, "172.16.0.1");
+      assert.strictEqual(result.configs.default.port, 2222);
+      assert.strictEqual(result.configs.default.username, "testuser");
+      assert.ok(result.configs.default.privateKey.includes(".ssh/test_key"));
+    });
+
+    it("命令行参数应覆盖 SSH config 值", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "testhost",
+        "--port",
+        "3333",
+        "--ssh-config-file",
+        testSshConfigPath,
+      ];
+      const result = CommandLineParser.parseArgs();
+
+      assert.strictEqual(result.configs.default.port, 3333); // 覆盖
+      assert.strictEqual(result.configs.default.host, "172.16.0.1"); // 从 SSH config
+      assert.strictEqual(result.configs.default.username, "testuser"); // 从 SSH config
+    });
+
+    it("应该支持 SSH config 别名 + 密码认证", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "testhost",
+        "--password",
+        "mypass",
+        "--ssh-config-file",
+        testSshConfigPath,
+      ];
+      const result = CommandLineParser.parseArgs();
+
+      assert.strictEqual(result.configs.default.password, "mypass");
+      assert.strictEqual(result.configs.default.host, "172.16.0.1");
+    });
+  });
+
+  describe("命令白名单和黑名单", () => {
+    it("应该正确解析命令白名单", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--port",
+        "22",
+        "--username",
+        "user",
+        "--password",
+        "pass",
+        "--whitelist",
+        "ls,cat,grep",
+      ];
+      const result = CommandLineParser.parseArgs();
+
+      assert.deepStrictEqual(result.configs.default.commandWhitelist, [
+        "ls",
+        "cat",
+        "grep",
+      ]);
+    });
+
+    it("应该正确解析命令黑名单", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--port",
+        "22",
+        "--username",
+        "user",
+        "--password",
+        "pass",
+        "--blacklist",
+        "rm,shutdown,reboot",
+      ];
+      const result = CommandLineParser.parseArgs();
+
+      assert.deepStrictEqual(result.configs.default.commandBlacklist, [
+        "rm",
+        "shutdown",
+        "reboot",
+      ]);
+    });
+  });
+
+  describe("其他选项", () => {
+    it("默认 transportMode 应为 exec", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--port",
+        "22",
+        "--username",
+        "user",
+        "--password",
+        "pass",
+      ];
+      const result = CommandLineParser.parseArgs();
+
+      assert.strictEqual(result.configs.default.transportMode, "exec");
+      assert.strictEqual(result.configs.default.shellReadyTimeoutMs, 10000);
+    });
+
+    it("应该正确解析 shell transport 相关选项", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--port",
+        "22",
+        "--username",
+        "user",
+        "--password",
+        "pass",
+        "--transport-mode",
+        "shell",
+        "--shell-ready-timeout",
+        "15000",
+      ];
+      const result = CommandLineParser.parseArgs();
+
+      assert.strictEqual(result.configs.default.transportMode, "shell");
       assert.strictEqual(result.configs.default.shellReadyTimeoutMs, 15000);
     });
 
-    it('应该正确解析 --pty 选项', () => {
-      process.argv = ['node', 'test', '--host', '1.2.3.4', '--port', '22', '--username', 'user', '--password', 'pass', '--pty'];
+    it("应该正确解析 terminal transport 及窗口尺寸选项", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--port",
+        "22",
+        "--username",
+        "user",
+        "--password",
+        "pass",
+        "--transport-mode",
+        "terminal",
+        "--terminal-cols",
+        "200",
+        "--terminal-rows",
+        "50",
+      ];
+      const result = CommandLineParser.parseArgs();
+
+      assert.strictEqual(result.configs.default.transportMode, "terminal");
+      assert.strictEqual(result.configs.default.terminalCols, 200);
+      assert.strictEqual(result.configs.default.terminalRows, 50);
+    });
+
+    it("应拒绝未知的 transport-mode 值", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--port",
+        "22",
+        "--username",
+        "user",
+        "--password",
+        "pass",
+        "--transport-mode",
+        "bogus",
+      ];
+      assert.throws(
+        () => CommandLineParser.parseArgs(),
+        /transport-mode|transportMode/i,
+      );
+    });
+
+    it("应该正确解析 --pty 选项", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--port",
+        "22",
+        "--username",
+        "user",
+        "--password",
+        "pass",
+        "--pty",
+      ];
       const result = CommandLineParser.parseArgs();
 
       assert.strictEqual(result.configs.default.pty, true);
     });
 
-    it('应该正确解析配置文件中的字符串 false pty', () => {
-      const ptyConfigPath = path.join(__dirname, 'fixtures', 'pty-config.json');
-      fs.writeFileSync(ptyConfigPath, JSON.stringify({
-        dev: {
-          host: '192.168.1.100',
-          port: 22,
-          username: 'devuser',
-          password: 'devpass',
-          pty: 'false'
-        }
-      }));
+    it("应该正确解析配置文件中的字符串 false pty", () => {
+      const ptyConfigPath = path.join(__dirname, "fixtures", "pty-config.json");
+      fs.writeFileSync(
+        ptyConfigPath,
+        JSON.stringify({
+          dev: {
+            host: "192.168.1.100",
+            port: 22,
+            username: "devuser",
+            password: "devpass",
+            pty: "false",
+          },
+        }),
+      );
 
-      process.argv = ['node', 'test', '--config-file', ptyConfigPath];
+      process.argv = ["node", "test", "--config-file", ptyConfigPath];
       const result = CommandLineParser.parseArgs();
 
       assert.strictEqual(result.configs.dev.pty, false);
@@ -378,108 +628,222 @@ Host minimalhost
       fs.unlinkSync(ptyConfigPath);
     });
 
-    it('应该正确解析 --pre-connect 选项', () => {
-      process.argv = ['node', 'test', '--host', '1.2.3.4', '--port', '22', '--username', 'user', '--password', 'pass', '--pre-connect'];
+    it("应该正确解析 --pre-connect 选项", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--port",
+        "22",
+        "--username",
+        "user",
+        "--password",
+        "pass",
+        "--pre-connect",
+      ];
       const result = CommandLineParser.parseArgs();
 
       assert.strictEqual(result.preConnect, true);
     });
 
-    it('应该正确解析 SOCKS 代理', () => {
-      process.argv = ['node', 'test', '--host', '1.2.3.4', '--port', '22', '--username', 'user', '--password', 'pass', '--socksProxy', 'socks://proxy:1080'];
+    it("应该正确解析 SOCKS 代理", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--port",
+        "22",
+        "--username",
+        "user",
+        "--password",
+        "pass",
+        "--socksProxy",
+        "socks://proxy:1080",
+      ];
       const result = CommandLineParser.parseArgs();
 
-      assert.strictEqual(result.configs.default.socksProxy, 'socks://proxy:1080');
+      assert.strictEqual(
+        result.configs.default.socksProxy,
+        "socks://proxy:1080",
+      );
     });
 
-    it('应该正确解析 allowed local paths', () => {
-      process.argv = ['node', 'test', '--host', '1.2.3.4', '--port', '22', '--username', 'user', '--password', 'pass', '--allowed-local-paths', './tmp,~/.ssh'];
+    it("应该正确解析 allowed local paths", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--port",
+        "22",
+        "--username",
+        "user",
+        "--password",
+        "pass",
+        "--allowed-local-paths",
+        "./tmp,~/.ssh",
+      ];
       const result = CommandLineParser.parseArgs();
 
       assert.ok(Array.isArray(result.configs.default.allowedLocalPaths));
       assert.strictEqual(result.configs.default.allowedLocalPaths.length, 2);
-      assert.ok(result.configs.default.allowedLocalPaths.every((entry) => entry.startsWith('/')));
-      assert.strictEqual(result.configs.default.allowedLocalPaths[1], path.join(os.homedir(), '.ssh'));
-    });
-
-    it('应该正确解析 allowed remote paths', () => {
-      process.argv = ['node', 'test', '--host', '1.2.3.4', '--port', '22', '--username', 'user', '--password', 'pass', '--allowed-remote-paths', '/var/log,/home/ops/inbox/'];
-      const result = CommandLineParser.parseArgs();
-
-      assert.deepStrictEqual(
-        result.configs.default.allowedRemotePaths,
-        ['/var/log', '/home/ops/inbox']
+      assert.ok(
+        result.configs.default.allowedLocalPaths.every((entry) =>
+          entry.startsWith("/"),
+        ),
+      );
+      assert.strictEqual(
+        result.configs.default.allowedLocalPaths[1],
+        path.join(os.homedir(), ".ssh"),
       );
     });
 
-    it('相对的 allowedRemotePaths 条目应抛出错误', () => {
-      process.argv = ['node', 'test', '--host', '1.2.3.4', '--port', '22', '--username', 'user', '--password', 'pass', '--allowed-remote-paths', 'var/log'];
+    it("应该正确解析 allowed remote paths", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--port",
+        "22",
+        "--username",
+        "user",
+        "--password",
+        "pass",
+        "--allowed-remote-paths",
+        "/var/log,/home/ops/inbox/",
+      ];
+      const result = CommandLineParser.parseArgs();
+
+      assert.deepStrictEqual(result.configs.default.allowedRemotePaths, [
+        "/var/log",
+        "/home/ops/inbox",
+      ]);
+    });
+
+    it("相对的 allowedRemotePaths 条目应抛出错误", () => {
+      process.argv = [
+        "node",
+        "test",
+        "--host",
+        "1.2.3.4",
+        "--port",
+        "22",
+        "--username",
+        "user",
+        "--password",
+        "pass",
+        "--allowed-remote-paths",
+        "var/log",
+      ];
       assert.throws(() => CommandLineParser.parseArgs(), /absolute POSIX/);
     });
 
-    it('应该正确解析配置文件中的 commandTemplate', () => {
-      const templateConfigPath = path.join(__dirname, 'fixtures', 'template-config.json');
-      fs.writeFileSync(templateConfigPath, JSON.stringify({
-        dev: {
-          host: '192.168.1.100',
-          port: 22,
-          username: 'devuser',
-          password: 'devpass',
-          commandTemplate: "su root -c '<command>'"
-        }
-      }));
+    it("应该正确解析配置文件中的 commandTemplate", () => {
+      const templateConfigPath = path.join(
+        __dirname,
+        "fixtures",
+        "template-config.json",
+      );
+      fs.writeFileSync(
+        templateConfigPath,
+        JSON.stringify({
+          dev: {
+            host: "192.168.1.100",
+            port: 22,
+            username: "devuser",
+            password: "devpass",
+            commandTemplate: "su root -c '<command>'",
+          },
+        }),
+      );
 
-      process.argv = ['node', 'test', '--config-file', templateConfigPath];
+      process.argv = ["node", "test", "--config-file", templateConfigPath];
       const result = CommandLineParser.parseArgs();
 
-      assert.strictEqual(result.configs.dev.commandTemplate, "su root -c '<command>'");
+      assert.strictEqual(
+        result.configs.dev.commandTemplate,
+        "su root -c '<command>'",
+      );
 
       fs.unlinkSync(templateConfigPath);
     });
 
-    it('应该支持 commandTemplate 的 <quotedCommand> 占位符', () => {
-      const templateConfigPath = path.join(__dirname, 'fixtures', 'quoted-template-config.json');
-      fs.writeFileSync(templateConfigPath, JSON.stringify({
-        dev: {
-          host: '192.168.1.100',
-          port: 22,
-          username: 'devuser',
-          password: 'devpass',
-          commandTemplate: "su root -c <quotedCommand>"
-        }
-      }));
+    it("应该支持 commandTemplate 的 <quotedCommand> 占位符", () => {
+      const templateConfigPath = path.join(
+        __dirname,
+        "fixtures",
+        "quoted-template-config.json",
+      );
+      fs.writeFileSync(
+        templateConfigPath,
+        JSON.stringify({
+          dev: {
+            host: "192.168.1.100",
+            port: 22,
+            username: "devuser",
+            password: "devpass",
+            commandTemplate: "su root -c <quotedCommand>",
+          },
+        }),
+      );
 
-      process.argv = ['node', 'test', '--config-file', templateConfigPath];
+      process.argv = ["node", "test", "--config-file", templateConfigPath];
       const result = CommandLineParser.parseArgs();
 
-      assert.strictEqual(result.configs.dev.commandTemplate, "su root -c <quotedCommand>");
+      assert.strictEqual(
+        result.configs.dev.commandTemplate,
+        "su root -c <quotedCommand>",
+      );
 
       fs.unlinkSync(templateConfigPath);
     });
 
-    it('commandTemplate 缺少 <command> 占位符时应抛出错误', () => {
-      const badConfigPath = path.join(__dirname, 'fixtures', 'bad-template-config.json');
-      fs.writeFileSync(badConfigPath, JSON.stringify({
-        dev: {
-          host: '192.168.1.100',
-          port: 22,
-          username: 'devuser',
-          password: 'devpass',
-          commandTemplate: "su root -c 'missing placeholder'"
-        }
-      }));
+    it("commandTemplate 缺少 <command> 占位符时应抛出错误", () => {
+      const badConfigPath = path.join(
+        __dirname,
+        "fixtures",
+        "bad-template-config.json",
+      );
+      fs.writeFileSync(
+        badConfigPath,
+        JSON.stringify({
+          dev: {
+            host: "192.168.1.100",
+            port: 22,
+            username: "devuser",
+            password: "devpass",
+            commandTemplate: "su root -c 'missing placeholder'",
+          },
+        }),
+      );
 
-      process.argv = ['node', 'test', '--config-file', badConfigPath];
+      process.argv = ["node", "test", "--config-file", badConfigPath];
       assert.throws(() => CommandLineParser.parseArgs(), /<command>/);
 
       fs.unlinkSync(badConfigPath);
     });
   });
 
-  describe('优先级测试', () => {
-    it('配置文件应优先于 --ssh 参数', () => {
-      const sshJson = JSON.stringify({ name: 'test', host: '1.1.1.1', port: 22, username: 'user1', password: 'pass1' });
-      process.argv = ['node', 'test', '--config-file', testConfigPath, '--ssh', sshJson];
+  describe("优先级测试", () => {
+    it("配置文件应优先于 --ssh 参数", () => {
+      const sshJson = JSON.stringify({
+        name: "test",
+        host: "1.1.1.1",
+        port: 22,
+        username: "user1",
+        password: "pass1",
+      });
+      process.argv = [
+        "node",
+        "test",
+        "--config-file",
+        testConfigPath,
+        "--ssh",
+        sshJson,
+      ];
       const result = CommandLineParser.parseArgs();
 
       // 应该只有配置文件中的服务器
@@ -489,13 +853,32 @@ Host minimalhost
       assert.ok(!result.configs.test);
     });
 
-    it('--ssh 参数应优先于单连接模式', () => {
-      const sshJson = JSON.stringify({ name: 'test', host: '1.1.1.1', port: 22, username: 'user1', password: 'pass1' });
-      process.argv = ['node', 'test', '--ssh', sshJson, '--host', '2.2.2.2', '--port', '22', '--username', 'user2', '--password', 'pass2'];
+    it("--ssh 参数应优先于单连接模式", () => {
+      const sshJson = JSON.stringify({
+        name: "test",
+        host: "1.1.1.1",
+        port: 22,
+        username: "user1",
+        password: "pass1",
+      });
+      process.argv = [
+        "node",
+        "test",
+        "--ssh",
+        sshJson,
+        "--host",
+        "2.2.2.2",
+        "--port",
+        "22",
+        "--username",
+        "user2",
+        "--password",
+        "pass2",
+      ];
       const result = CommandLineParser.parseArgs();
 
       assert.strictEqual(Object.keys(result.configs).length, 1);
-      assert.strictEqual(result.configs.test.host, '1.1.1.1');
+      assert.strictEqual(result.configs.test.host, "1.1.1.1");
     });
   });
 });

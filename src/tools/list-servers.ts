@@ -1,5 +1,6 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSHConnectionManager } from "../services/ssh-connection-manager.js";
+import { AuditLogger } from "../utils/audit-logger.js";
 
 type ServerInfo = ReturnType<SSHConnectionManager["getAllServerInfos"]>[number];
 
@@ -48,13 +49,20 @@ export function registerListServersTool(server: McpServer): void {
       description: "List all available SSH server configurations",
     },
     async () => {
+      const start = Date.now();
       const sshManager = SSHConnectionManager.getInstance();
       const servers = sshManager.getAllServerInfos();
+      const text = formatServerList(servers);
+      AuditLogger.log({
+        tool: "list-servers",
+        output: `${servers.length} server(s)`,
+        durationMs: Date.now() - start,
+      });
       return {
         content: [
           {
             type: "text",
-            text: formatServerList(servers),
+            text,
           },
         ],
       };

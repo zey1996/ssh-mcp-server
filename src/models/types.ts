@@ -2,29 +2,31 @@
  * SSH connection configuration interface
  */
 export interface SSHConfig {
-  name?: string; // Connection name, optional, compatible with single connection
-  host: string;
-  port: number;
-  username: string;
-  password?: string;
-  privateKey?: string;
-  passphrase?: string;
-  agent?: string; // SSH agent for authentication (use 'pageant' for Windows Pageant)
-  tryKeyboard?: boolean; // Enable keyboard-interactive authentication. Password prompts use `password`; non-password prompts (e.g. OTP) use the SSH_MCP_2FA_CODE env var. Default: false
-  commandWhitelist?: string[]; // Command whitelist (array of regex strings)
-  commandBlacklist?: string[]; // Command blacklist (array of regex strings)
-  socksProxy?: string; // SOCKS proxy URL, e.g. 'socks://user:pass@host:port'
-  pty?: boolean; // Allocate pseudo-tty for command execution, default: true
-  allowedLocalPaths?: string[]; // Allowed local paths for upload/download
-  allowedRemotePaths?: string[]; // Allowed remote paths for SFTP upload/download (POSIX, absolute)
-  transportMode?: "exec" | "shell"; // SSH transport mode, default: exec
-  shellReadyTimeoutMs?: number; // Shell readiness probe timeout, default: 10000ms
-  shellCommandTimeoutMs?: number; // Shell command timeout override, default: 30000ms
-  connectionTimeoutMs?: number; // SSH connection and handshake timeout, default: 30000ms
-  sftpTimeoutMs?: number; // SFTP open and transfer timeout, default: 300000ms
-  keepaliveIntervalMs?: number; // SSH keepalive interval, default: 10000ms
-  keepaliveCountMax?: number; // Unanswered keepalive packets before disconnect, default: 3
-  commandTemplate?: string; // Command template, use <quotedCommand> for shell arguments or <command> for raw insertion
+	name?: string; // Connection name, optional, compatible with single connection
+	host: string;
+	port: number;
+	username: string;
+	password?: string;
+	privateKey?: string;
+	passphrase?: string;
+	agent?: string; // SSH agent for authentication (use 'pageant' for Windows Pageant)
+	tryKeyboard?: boolean; // Enable keyboard-interactive authentication. Password prompts use `password`; non-password prompts (e.g. OTP) use the SSH_MCP_2FA_CODE env var. Default: false
+	commandWhitelist?: string[]; // Command whitelist (array of regex strings)
+	commandBlacklist?: string[]; // Command blacklist (array of regex strings)
+	socksProxy?: string; // SOCKS proxy URL, e.g. 'socks://user:pass@host:port'
+	pty?: boolean; // Allocate pseudo-tty for command execution, default: true
+	allowedLocalPaths?: string[]; // Allowed local paths for upload/download
+	allowedRemotePaths?: string[]; // Allowed remote paths for SFTP upload/download (POSIX, absolute)
+	transportMode?: "exec" | "shell" | "terminal"; // SSH transport mode, default: exec. 'terminal' exposes an interactive PTY for driving TUI/bastion menus.
+	shellReadyTimeoutMs?: number; // Shell readiness probe timeout, default: 10000ms
+	shellCommandTimeoutMs?: number; // Shell command timeout override, default: 30000ms
+	terminalCols?: number; // Terminal PTY width in columns for 'terminal' mode, default: 200
+	terminalRows?: number; // Terminal PTY height in rows for 'terminal' mode, default: 50
+	connectionTimeoutMs?: number; // SSH connection and handshake timeout, default: 30000ms
+	sftpTimeoutMs?: number; // SFTP open and transfer timeout, default: 300000ms
+	keepaliveIntervalMs?: number; // SSH keepalive interval, default: 10000ms
+	keepaliveCountMax?: number; // Unanswered keepalive packets before disconnect, default: 3
+	commandTemplate?: string; // Command template, use <quotedCommand> for shell arguments or <command> for raw insertion
 }
 
 /**
@@ -41,54 +43,55 @@ export type LogLevel = "info" | "error" | "debug";
  * System status information
  */
 export interface ServerStatus {
-  reachable: boolean;
-  hostname?: string;
-  ipAddresses?: string[];
-  osName?: string;
-  osVersion?: string;
-  kernelVersion?: string;
-  uptime?: string;
-  diskSpace?: {
-    free: string;
-    total: string;
-  };
-  drives?: Array<{
-    device: string;
-    mountPoint: string;
-    total: string;
-    used: string;
-    free: string;
-    usagePercent: string;
-    filesystem?: string;
-  }>;
-  memory?: {
-    free: string;
-    total: string;
-  };
-  cpu?: {
-    name?: string;
-    usage?: string;
-  };
-  gpus?: Array<{
-    name: string;
-    usage?: string;
-    path?: string;
-  }>;
-  processes?: {
-    running: number;
-    threads: number;
-  };
-  services?: {
-    running: number;
-    installed: number;
-  };
-  lastUpdated?: string;
+	reachable: boolean;
+	hostname?: string;
+	ipAddresses?: string[];
+	osName?: string;
+	osVersion?: string;
+	kernelVersion?: string;
+	uptime?: string;
+	diskSpace?: {
+		free: string;
+		total: string;
+	};
+	drives?: Array<{
+		device: string;
+		mountPoint: string;
+		total: string;
+		used: string;
+		free: string;
+		usagePercent: string;
+		filesystem?: string;
+	}>;
+	memory?: {
+		free: string;
+		total: string;
+	};
+	cpu?: {
+		name?: string;
+		usage?: string;
+	};
+	gpus?: Array<{
+		name: string;
+		usage?: string;
+		path?: string;
+	}>;
+	processes?: {
+		running: number;
+		threads: number;
+	};
+	services?: {
+		running: number;
+		installed: number;
+	};
+	lastUpdated?: string;
 }
 
 /**
  * Parsed command line arguments result
  */
 export interface ParsedArgs {
-  configs: SshConnectionConfigMap;
-  preConnect: boolean;
+	configs: SshConnectionConfigMap;
+	preConnect: boolean;
+	auditLog?: string;
 }
