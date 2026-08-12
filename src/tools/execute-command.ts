@@ -1,8 +1,9 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { SSHConnectionManager } from "../services/ssh-connection-manager.js";
 import { Logger } from "../utils/logger.js";
 import { toToolError } from "../utils/tool-error.js";
+import { AuditLogger } from "../utils/audit-logger.js";
 
 /**
  * Register execute command tool
@@ -30,6 +31,8 @@ export function registerExecuteCommandTool(server: McpServer): void {
       },
     },
     async ({ cmdString, directory, connectionName, timeout }) => {
+      const start = Date.now();
+      const auditInput = { cmdString, directory, timeout };
       try {
         const result = await sshManager.executeCommand(
           cmdString,
@@ -39,12 +42,26 @@ export function registerExecuteCommandTool(server: McpServer): void {
             timeout,
           },
         );
+        AuditLogger.log({
+          tool: "execute-command",
+          connection: connectionName,
+          input: auditInput,
+          output: result,
+          durationMs: Date.now() - start,
+        });
         return {
           content: [{ type: "text", text: result }],
         };
       } catch (error: unknown) {
         const toolError = toToolError(error, "UNKNOWN_ERROR");
         Logger.handleError(toolError, "Failed to execute command");
+        AuditLogger.log({
+          tool: "execute-command",
+          connection: connectionName,
+          input: auditInput,
+          durationMs: Date.now() - start,
+          error: { code: toolError.code, message: toolError.message },
+        });
         return {
           content: [{
             type: "text",

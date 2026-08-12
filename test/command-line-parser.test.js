@@ -351,6 +351,39 @@ Host minimalhost
       assert.strictEqual(result.configs.default.shellReadyTimeoutMs, 15000);
     });
 
+    it('应该正确解析 terminal transport 及窗口尺寸选项', () => {
+      process.argv = [
+        'node', 'test',
+        '--host', '1.2.3.4',
+        '--port', '22',
+        '--username', 'user',
+        '--password', 'pass',
+        '--transport-mode', 'terminal',
+        '--terminal-cols', '200',
+        '--terminal-rows', '50'
+      ];
+      const result = CommandLineParser.parseArgs();
+
+      assert.strictEqual(result.configs.default.transportMode, 'terminal');
+      assert.strictEqual(result.configs.default.terminalCols, 200);
+      assert.strictEqual(result.configs.default.terminalRows, 50);
+    });
+
+    it('应拒绝未知的 transport-mode 值', () => {
+      process.argv = [
+        'node', 'test',
+        '--host', '1.2.3.4',
+        '--port', '22',
+        '--username', 'user',
+        '--password', 'pass',
+        '--transport-mode', 'bogus'
+      ];
+      assert.throws(
+        () => CommandLineParser.parseArgs(),
+        /transport-mode|transportMode/i,
+      );
+    });
+
     it('应该正确解析 --pty 选项', () => {
       process.argv = ['node', 'test', '--host', '1.2.3.4', '--port', '22', '--username', 'user', '--password', 'pass', '--pty'];
       const result = CommandLineParser.parseArgs();

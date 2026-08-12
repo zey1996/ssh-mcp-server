@@ -17,9 +17,11 @@ export interface SSHConfig {
   pty?: boolean; // Allocate pseudo-tty for command execution, default: true
   allowedLocalPaths?: string[]; // Allowed local paths for upload/download
   allowedRemotePaths?: string[]; // Allowed remote paths for SFTP upload/download (POSIX, absolute)
-  transportMode?: "exec" | "shell"; // SSH transport mode, default: exec
+  transportMode?: "exec" | "shell" | "terminal"; // SSH transport mode, default: exec. 'terminal' exposes an interactive PTY for driving TUI/bastion menus.
   shellReadyTimeoutMs?: number; // Shell readiness probe timeout, default: 10000ms
   shellCommandTimeoutMs?: number; // Shell command timeout override, default: 30000ms
+  terminalCols?: number; // Terminal PTY width in columns for 'terminal' mode, default: 200
+  terminalRows?: number; // Terminal PTY height in rows for 'terminal' mode, default: 50
   connectionTimeoutMs?: number; // SSH connection and handshake timeout, default: 30000ms
   sftpTimeoutMs?: number; // SFTP open and transfer timeout, default: 300000ms
   keepaliveIntervalMs?: number; // SSH keepalive interval, default: 10000ms
@@ -91,4 +93,5 @@ export interface ServerStatus {
 export interface ParsedArgs {
   configs: SshConnectionConfigMap;
   preConnect: boolean;
+  auditLog?: string;
 }

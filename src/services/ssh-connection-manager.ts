@@ -1,6 +1,6 @@
-import { Client, ClientChannel, SFTPWrapper } from "ssh2";
+import { Client, type ClientChannel, type SFTPWrapper } from "ssh2";
 import { SocksClient } from "socks";
-import {
+import type {
   SSHConfig,
   SshConnectionConfigMap,
   ServerStatus,
@@ -8,6 +8,11 @@ import {
 import { Logger } from "../utils/logger.js";
 import { collectSystemStatus } from "../utils/status-collector.js";
 import { ToolError } from "../utils/tool-error.js";
+import {
+  TerminalSession,
+  DEFAULT_TERMINAL_COLS,
+  DEFAULT_TERMINAL_ROWS,
+} from "./terminal-session.js";
 import fs from "fs";
 import path from "path";
 import { pipeline } from "node:stream/promises";
@@ -118,6 +123,7 @@ export class SSHConnectionManager {
   private shellReady: Map<string, boolean> = new Map();
   private shellQueues: Map<string, Promise<unknown>> = new Map();
   private shellBuffers: Map<string, string> = new Map();
+  private terminalSessions: Map<string, TerminalSession> = new Map();
   private defaultName: string = "default";
 
   private constructor() {}
@@ -271,8 +277,11 @@ export class SSHConnectionManager {
         );
 
         try {
-          if (this.getTransportMode(config) === "shell") {
+          const mode = this.getTransportMode(config);
+          if (mode === "shell") {
             await this.initializeShellSession(client, key, config);
+          } else if (mode === "terminal") {
+            await this.initializeTerminalSession(client, key, config);
           }
 
           this.clients.set(key, client);
@@ -282,6 +291,7 @@ export class SSHConnectionManager {
         } catch (error) {
           this.connected.set(key, false);
           this.cleanupShellState(key, true);
+          this.cleanupTerminalSession(key);
           try {
             client.end();
           } catch {
@@ -701,6 +711,7 @@ export class SSHConnectionManager {
 
     for (const [key] of this.clients) {
       this.cleanupShellState(key, true);
+      this.cleanupTerminalSession(key);
     }
 
     if (this.clients.size > 0) {
@@ -719,6 +730,7 @@ export class SSHConnectionManager {
     this.shellReady.clear();
     this.shellQueues.clear();
     this.shellBuffers.clear();
+    this.terminalSessions.clear();
   }
 
   /**
@@ -770,16 +782,21 @@ export class SSHConnectionManager {
     }
 
     const config = this.getConfig(key);
-    if (this.getTransportMode(config) === "shell") {
+    const mode = this.getTransportMode(config);
+    if (mode === "shell") {
       return (
         this.shellReady.get(key) === true && this.shellStreams.has(key)
       );
+    }
+    if (mode === "terminal") {
+      const session = this.terminalSessions.get(key);
+      return session?.isAlive() === true;
     }
 
     return true;
   }
 
-  private getTransportMode(config: SSHConfig): "exec" | "shell" {
+  private getTransportMode(config: SSHConfig): "exec" | "shell" | "terminal" {
     return config.transportMode || "exec";
   }
 
@@ -1203,6 +1220,14 @@ export class SSHConnectionManager {
 
     if (transportMode === "shell") {
       return this.runShellCommand(cmdString, directory, name, timeout);
+    }
+
+    if (transportMode === "terminal") {
+      throw new ToolError(
+        "UNSUPPORTED_IN_TERMINAL_MODE",
+        "execute-command is not available in terminal transport mode. Use the 'terminal' / 'terminal_resize' tools to drive the interactive session instead.",
+        false,
+      );
     }
 
     return this.runExecCommand(
@@ -1826,6 +1851,80 @@ export class SSHConnectionManager {
     this.shellBuffers.delete(key);
   }
 
+  private cleanupTerminalSession(key: string): void {
+    const session = this.terminalSessions.get(key);
+    if (session) {
+      try {
+        session.dispose();
+      } catch {
+        // Ignore dispose errors.
+      }
+    }
+    this.terminalSessions.delete(key);
+  }
+
+  /**
+   * Open an interactive shell (PTY) and wrap it in a TerminalSession backed by
+   * a headless xterm.js emulator. Used by the 'terminal' transport mode to
+   * drive TUI/bastion menus.
+   */
+  private async initializeTerminalSession(
+    client: Client,
+    key: string,
+    config: SSHConfig,
+  ): Promise<void> {
+    const cols = config.terminalCols || DEFAULT_TERMINAL_COLS;
+    const rows = config.terminalRows || DEFAULT_TERMINAL_ROWS;
+
+    const stream = await new Promise<ClientChannel>((resolve, reject) => {
+      client.shell(
+        { term: "xterm", cols, rows },
+        (err: Error | undefined, channel: ClientChannel) => {
+          if (err) {
+            reject(
+              new ToolError(
+                "SSH_CONNECTION_FAILED",
+                `Failed to open terminal shell for [${key}]: ${err.message}`,
+                true,
+              ),
+            );
+            return;
+          }
+          resolve(channel);
+        },
+      );
+    });
+
+    const session = new TerminalSession(stream, cols, rows);
+    this.terminalSessions.set(key, session);
+
+    // Wait for the initial screen (e.g. bastion portal menu) to render and
+    // settle. Some TUI portals take several seconds to appear after the pty
+    // opens, so require data and allow a generous cap.
+    await session.waitForSettle(500, 12000, true);
+    Logger.log(
+      `Terminal session initialized for [${key}] (${cols}x${rows})`,
+      "info",
+    );
+  }
+
+  /** Get the live TerminalSession for a connection (connecting if needed). */
+  public async getTerminalSession(name?: string): Promise<TerminalSession> {
+    const key = name || this.defaultName;
+    if (!this.hasUsableConnection(key)) {
+      await this.connect(key);
+    }
+    const session = this.terminalSessions.get(key);
+    if (!session || !session.isAlive()) {
+      throw new ToolError(
+        "SSH_CONNECTION_FAILED",
+        `Terminal session for [${key}] is not ready`,
+        true,
+      );
+    }
+    return session;
+  }
+
   private clearConnectionState(key: string): void {
     const pendingStatusCollection = this.pendingStatusCollections.get(key);
     if (pendingStatusCollection) {
@@ -1834,6 +1933,7 @@ export class SSHConnectionManager {
     }
 
     this.cleanupShellState(key);
+    this.cleanupTerminalSession(key);
     this.connected.set(key, false);
     this.clients.delete(key);
     this.pendingConnections.delete(key);

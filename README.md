@@ -27,7 +27,7 @@ Welcome to join wechat group:
 - **🔒 Secure Connections**: Supports multiple secure SSH connection methods, including password authentication and private key authentication (with passphrase support)
 - **🛡️ Command Security Control**: Precisely control the range of allowed commands through flexible blacklist and whitelist mechanisms to prevent dangerous operations
 - **🔄 Standardized Interface**: Complies with MCP protocol specifications for seamless integration with AI assistants supporting the protocol
-- **🚇 Dual Transport Modes**: Supports both `exec` and `shell` transport modes for direct SSH hosts and bastion or jump-host scenarios
+- **🚇 Triple Transport Modes**: Supports `exec`, `shell`, and `terminal` transport modes for direct SSH hosts, bastion/jump hosts, and interactive TUI/bastion portals respectively
 - **📂 File Transfer**: Supports bidirectional file transfers, uploading local files to servers or downloading files from servers
 - **🔑 Credential Isolation**: SSH credentials are managed entirely locally and never exposed to AI models, enhancing security
 - **🚀 Ready to Use**: Can be run directly using NPX without global installation, making it convenient and quick to deploy
@@ -46,6 +46,8 @@ NPM: [https://www.npmjs.com/package/@fangjunjie/ssh-mcp-server](https://www.npmj
 | upload | File Upload Tool | Upload local files to specified locations on remote servers |
 | download | File Download Tool | Download files from remote servers to local specified locations |
 | list-servers | List Servers Tool | List all available SSH server configurations |
+| terminal | Interactive Terminal Tool | Drive interactive TUI/bastion portals: send keystrokes and read the screen (terminal mode) |
+| terminal_resize | Terminal Resize Tool | Resize the interactive terminal PTY (terminal mode) |
 
 ## 📚 Usage
 
@@ -320,7 +322,46 @@ Behavior differences:
 
 In JSON config files you can also set `shellCommandTimeoutMs` to override the default per-command timeout for shell-backed connections.
 
-### 9. 🔐 Multi-Factor Authentication (2FA / MFA)
+### 9. 🖥️ Interactive TUI / Bastion Portals (`transportMode: terminal`)
+
+Some jump servers expose a **full-screen TUI menu** (e.g. UGATE-PORTAL character portals) instead of a plain shell. Neither `exec` nor `shell` mode can drive these — there is no shell prompt to probe and command execution is intercepted by the portal. Switch to `terminal` mode: it opens an interactive PTY backed by a headless [xterm.js](https://xtermjs.org/) emulator and exposes two tools that let the agent **see the screen and send keystrokes**, exactly like driving a real terminal.
+
+Behavior:
+
+- `terminal`: opens a persistent interactive shell. The agent reads the current screen, decides what to type (a menu number, a command, …), sends it, and reads the result. Supports interactive menus, curses apps, `vim`/`top`, and bastion portals that require step-by-step navigation (group → host → account → target shell).
+- In this mode `execute-command` / `upload` / `download` are disabled — use the `terminal` and `terminal_resize` tools instead.
+
+| Tool | Description |
+| --- | --- |
+| `terminal` | Send keystrokes (literal `text` and/or special `keys` like `Enter`, `Escape`, `F1`, `Up`, `Ctrl+C`) and read the resulting screen. Omit both to just read the current screen. |
+| `terminal_resize` | Resize the PTY. Some portals refuse to render until the window is large enough. |
+
+```json
+{
+  "mcpServers": {
+    "ssh-mcp-server": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@fangjunjie/ssh-mcp-server",
+        "--host", "bastion.example.com",
+        "--port", "10022",
+        "--username", "ops",
+        "--password", "pwd123456",
+        "--transport-mode", "terminal",
+        "--terminal-cols", "200",
+        "--terminal-rows", "50"
+      ]
+    }
+  }
+}
+```
+
+Typical agent flow for a bastion portal: call `terminal` (no args) to read the menu → call `terminal` with `{ "text": "1", "keys": ["Enter"] }` to pick group 1 → read the submenu → pick a host → pick an account → you are now in the target machine shell → run commands with `{ "text": "whoami", "keys": ["Enter"] }` and read the output. The session stays open across calls, so subsequent commands are instant.
+
+In JSON config files you can also set `terminalCols` (default `200`) and `terminalRows` (default `50`); a large window is required by some portals.
+
+### 10. 🔐 Multi-Factor Authentication (2FA / MFA)
 
 When the SSH server requires multi-factor authentication (password + private key + 2FA verification code), enable `tryKeyboard`. The password and private key are auto-supplied. For non-password prompts, set `SSH_MCP_2FA_CODE` in the server environment before connecting.
 
@@ -349,7 +390,7 @@ When the SSH server requires multi-factor authentication (password + private key
 2. Password authentication (if provided)
 3. Keyboard-interactive for 2FA code via `SSH_MCP_2FA_CODE`
 
-### 10. 🧩 Managing Multiple SSH Connections
+### 11. 🧩 Managing Multiple SSH Connections
 
 When you need to expose more than one SSH target through the same MCP server, register them under unique connection names and select the target at call time via `connectionName`. There are three ways to configure them:
 
@@ -561,13 +602,75 @@ Options:
   -s, --socksProxy    SOCKS proxy server address (e.g., socks://user:password@host:port)
   --allowed-local-paths   Additional allowed local paths for upload/download, comma-separated
   --allowed-remote-paths  Allowed remote (POSIX, absolute) paths for SFTP upload/download, comma-separated
-  --transport-mode    SSH transport mode: exec or shell (default: exec)
+  --transport-mode    SSH transport mode: exec, shell, or terminal (default: exec)
   --shell-ready-timeout   Shell readiness probe timeout in milliseconds (default: 10000)
+  --terminal-cols    Terminal PTY width in columns for 'terminal' mode (default: 200)
+  --terminal-rows    Terminal PTY height in rows for 'terminal' mode (default: 50)
+  --audit-log        Audit log file path. When set, every tool operation is appended as a JSONL record for later review. Also configurable via the SSH_MCP_AUDIT_LOG environment variable. Disabled by default.
   --command-template  Command template, use <quotedCommand> for shell arguments or <command> for raw insertion
   --pty               Allocate pseudo-tty for command execution (default: true)
   --pre-connect       Pre-connect to all configured SSH servers on startup
   --version, -v       Print package version
   --help              Print this help message
+```
+
+## 📝 Audit Logging
+
+The server can record every tool operation to an audit log file for later review. This is **completely independent** from the stderr diagnostic logging — enabling the audit log does not change any existing logging behavior.
+
+- **Disabled by default**: if no path is configured, the audit logger is a no-op and nothing is written (zero behavior change).
+- **JSONL format**: one JSON object per line, easy to parse with `grep`/`jq`.
+- **Records**: timestamp, tool name, connection name, sanitized input parameters (credentials never recorded), result summary (command stdout / terminal screen, truncated to 8000 chars), duration, and error details on failure.
+- Applies to **all** tools: `execute-command`, `upload`, `download`, `list-servers`, `terminal`, `terminal_resize`.
+
+Enable via CLI flag or environment variable:
+
+```json
+{
+  "mcpServers": {
+    "ssh-mcp-server": {
+      "command": "npx",
+      "args": [
+        "-y", "@fangjunjie/ssh-mcp-server",
+        "--host", "bastion.example.com", "--port", "10022",
+        "--username", "ops", "--password", "pwd",
+        "--transport-mode", "terminal",
+        "--audit-log", "/var/log/ssh-mcp/audit.jsonl"
+      ]
+    }
+  }
+}
+```
+
+Or via environment variable `SSH_MCP_AUDIT_LOG`:
+
+```json
+{
+  "mcpServers": {
+    "ssh-mcp-server": {
+      "command": "npx",
+      "args": ["-y", "@fangjunjie/ssh-mcp-server", "--host", "...", "--port", "22", "--username", "ops", "--password", "pwd"],
+      "env": { "SSH_MCP_AUDIT_LOG": "/var/log/ssh-mcp/audit.jsonl" }
+    }
+  }
+}
+```
+
+Example audit entry (one line, pretty-printed here for readability):
+
+```json
+{"timestamp":"2026-08-05T01:25:38.123Z","tool":"terminal","connection":"default","input":{"text":"1","keys":["Enter"],"waitMs":6000},"output":" AIS iFORT ... DEFAULT MENU ...","durationMs":353}
+```
+
+Review the log:
+
+```bash
+# All terminal interactions (keystrokes + screens)
+jq -c 'select(.tool=="terminal")' /var/log/ssh-mcp/audit.jsonl
+# Every command executed and its output
+jq -c 'select(.tool=="execute-command")' /var/log/ssh-mcp/audit.jsonl
+# Only failed operations
+jq -c 'select(.error)' /var/log/ssh-mcp/audit.jsonl
 ```
 
 ## 🛡️ Security Considerations

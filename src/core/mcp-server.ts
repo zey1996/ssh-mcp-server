@@ -5,6 +5,7 @@ import { CommandLineParser } from "../cli/command-line-parser.js";
 import { Logger } from "../utils/logger.js";
 import { registerAllTools } from "../tools/index.js";
 import { SERVER_CONFIG } from "../config/server.js";
+import { AuditLogger } from "../utils/audit-logger.js";
 
 /**
  * MCP Server class
@@ -34,6 +35,7 @@ export class SshMcpServer {
         Logger.log(`Received ${reason}, shutting down SSH MCP server...`, "info");
 
         this.sshManager.disconnect();
+        AuditLogger.close();
 
         try {
           await this.server.close();
@@ -78,6 +80,11 @@ export class SshMcpServer {
     // Initialize SSH configuration
     const parsedArgs = CommandLineParser.parseArgs();
     this.sshManager.setConfig(parsedArgs.configs);
+    // Configure audit logging (no-op unless --audit-log / SSH_MCP_AUDIT_LOG is set).
+    AuditLogger.configure(parsedArgs.auditLog);
+    if (AuditLogger.isEnabled()) {
+      Logger.log(`Audit logging enabled: ${AuditLogger.getFilePath()}`, "info");
+    }
     this.registerShutdownHandlers();
 
     // Register tools before accepting MCP requests.

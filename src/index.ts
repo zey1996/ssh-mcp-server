@@ -22,8 +22,11 @@ Options:
   -s, --socksProxy <url>           SOCKS proxy URL
   --allowed-local-paths <paths>    Extra allowed local paths, comma-separated
   --allowed-remote-paths <paths>   Allowed remote POSIX absolute paths, comma-separated
-  --transport-mode <mode>          SSH transport mode: exec or shell (default: exec)
+  --transport-mode <mode>          SSH transport mode: exec, shell, or terminal (default: exec)
   --shell-ready-timeout <ms>       Shell readiness probe timeout (default: 10000)
+  --terminal-cols <cols>           Terminal PTY width in columns for 'terminal' mode (default: 200)
+  --terminal-rows <rows>           Terminal PTY height in rows for 'terminal' mode (default: 50)
+  --audit-log <path>               Audit log file path; records every tool operation as JSONL. Also set via SSH_MCP_AUDIT_LOG env var. Disabled by default.
   --command-template <template>    Wrap commands with <command> or <quotedCommand>
   --pty                           Allocate pseudo-tty for exec mode commands (default: true)
   --try-keyboard                  Enable keyboard-interactive authentication

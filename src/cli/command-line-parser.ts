@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { SSHConfig, SshConnectionConfigMap, ParsedArgs } from "../models/types.js";
+import type { SSHConfig, SshConnectionConfigMap, ParsedArgs } from "../models/types.js";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -38,12 +38,12 @@ export class CommandLineParser {
       return undefined;
     }
 
-    if (value === "exec" || value === "shell") {
+    if (value === "exec" || value === "shell" || value === "terminal") {
       return value;
     }
 
     throw new Error(
-      `transportMode must be either 'exec' or 'shell', got: ${String(value)}`,
+      `transportMode must be one of 'exec', 'shell', or 'terminal', got: ${String(value)}`,
     );
   }
 
@@ -90,10 +90,13 @@ export class CommandLineParser {
         "allowed-remote-paths": { type: "string" },
         "transport-mode": { type: "string" },
         "shell-ready-timeout": { type: "string" },
+        "terminal-cols": { type: "string" },
+        "terminal-rows": { type: "string" },
         "command-template": { type: "string" },
         pty: { type: "boolean" },
         "try-keyboard": { type: "boolean" },
         "pre-connect": { type: "boolean" },
+        "audit-log": { type: "string" },
       },
       allowPositionals: true,
     });
@@ -232,6 +235,8 @@ export class CommandLineParser {
         tryKeyboard: tryKeyboard !== undefined ? tryKeyboard : undefined,
         transportMode: values["transport-mode"],
         shellReadyTimeoutMs: values["shell-ready-timeout"],
+        terminalCols: values["terminal-cols"],
+        terminalRows: values["terminal-rows"],
         commandTemplate,
         commandWhitelist: whitelist
           ? whitelist
@@ -263,6 +268,7 @@ export class CommandLineParser {
     return {
       configs: configMap,
       preConnect: values["pre-connect"] === true,
+      auditLog: values["audit-log"],
     };
   }
 
@@ -334,6 +340,14 @@ export class CommandLineParser {
       shellCommandTimeoutMs: this.parseTimeout(
         config.shellCommandTimeoutMs,
         "shellCommandTimeoutMs",
+      ),
+      terminalCols: this.parseTimeout(
+        config.terminalCols,
+        "terminalCols",
+      ),
+      terminalRows: this.parseTimeout(
+        config.terminalRows,
+        "terminalRows",
       ),
       connectionTimeoutMs: this.parseTimeout(
         config.connectionTimeoutMs,
